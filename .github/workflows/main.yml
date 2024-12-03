@@ -1,49 +1,80 @@
-name: Validate Library Version
+name: Check Library Version, Merge PR, and Create Release
 
 on:
   pull_request:
-    branches:
-      - main
+    types: [opened, synchronize, reopened]
 
 jobs:
-  verify-version:
-    name: Validate Version in `library.properties`
+  check-version-and-release:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the repository
-      - name: Checkout Repository
+      # Checkout the PR Code
+      - name: Checkout PR Code
         uses: actions/checkout@v3
 
-      # Step 2: Retrieve `library.properties` from the main branch
-      - name: Fetch Main Branch `library.properties`
+      # Extract the version from the PR
+      - name: Get Version from Pull Request
+        id: pr_version
+        run: |
+          pr_version=$(grep '^version=' library.properties | cut -d'=' -f2)
+          echo "PR version: $pr_version"
+          echo "pr_version=$pr_version" >> $GITHUB_ENV
+
+      # Fetch the main branch's library.properties
+      - name: Fetch Main Branch Version
         run: |
           git fetch origin main
           git checkout origin/main -- library.properties
-
-      # Step 3: Extract and compare version numbers
-      - name: Compare Version Numbers
-        id: compare
-        run: |
-          # Extract the version from the incoming pull request
-          pr_version=$(grep '^version=' library.properties | cut -d'=' -f2)
-          
-          # Extract the version from the main branch
           main_version=$(grep '^version=' library.properties | cut -d'=' -f2)
-          
-          echo "Incoming PR version: $pr_version"
-          echo "Main branch version: $main_version"
+          echo "Main version: $main_version"
+          echo "main_version=$main_version" >> $GITHUB_ENV
 
-          # Set the comparison result
+      # Compare Versions
+      - name: Compare Versions
+        id: compare_versions
+        run: |
           if [ "$pr_version" = "$main_version" ]; then
-            echo "::set-output name=status::fail"
+            echo "PR version is the same as the main branch version."
+            exit 1
           else
-            echo "::set-output name=status::pass"
+            echo "PR version is different from the main branch version."
           fi
 
-      # Step 4: Enforce version difference
-      - name: Enforce Version Update
-        if: steps.compare.outputs.status == 'fail'
+      # Merge the Pull Request
+      - name: Merge Pull Request
+        if: success() && steps.compare_versions.outcome == 'success'
         run: |
-          echo "Error: The version in 'library.properties' is unchanged. Please update the version to reflect the new changes."
-          exit 1
+          PR_NUMBER=$(jq --raw-output .pull_request.number $GITHUB_EVENT_PATH)
+          PR_TITLE=$(jq --raw-output .pull_request.title $GITHUB_EVENT_PATH)
+      
+          echo "Merging PR #${PR_NUMBER} titled \"${PR_TITLE}\""
+      
+          # GitHub API URL for merging the PR
+          API_URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"
+      
+          # Make API request to merge the pull request
+          curl -X PUT "${API_URL}" \
+            -H "Authorization: token ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d '{"commit_title":"Merge PR #'"${PR_NUMBER}"' - '"${PR_TITLE}"'","merge_method":"squash"}'
+      
+          echo "Pull request #${PR_NUMBER} merged successfully."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+      # Create a Release
+      - name: Create GitHub Release
+        if: success()
+        uses: actions/create-release@v1
+        with:
+          tag_name: v${{ env.pr_version }}
+          release_name: Release v${{ env.pr_version }}
+          body: |
+            **Changelog**
+            - Updated to version ${{ env.pr_version }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
