@@ -59,8 +59,7 @@ private:
 "   \\/_____/   \\/_____/   \\/_/   \r\n"
 "                                \r\n"
 "Welcome to the ESP8266 Telnet Server!\r\n"
-"Type 'help' to see the list of available commands.\r\n"
-"\r\n";
+"Type 'help' to see the list of available commands.\r\n";
 
     String banner;
     String prompt;
