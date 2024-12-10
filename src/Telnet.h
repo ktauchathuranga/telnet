@@ -70,6 +70,7 @@ private:
     void handleCommand(WiFiClient &client, const String &input);
     void removeInactiveClients();
     void disconnectClient(WiFiClient &client, const String &args);
+    void flushClient(WiFiClient &client);
 };
 
 #endif
