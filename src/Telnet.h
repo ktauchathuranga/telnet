@@ -52,11 +52,14 @@ private:
     std::map<String, String> aliases;
 
     const String defaultBanner =
-"  ______     ______     ______  \n"
-" /\\  ___\\   /\\  ___\\   /\\  == \\ \n"
-" \\ \\  __\\   \\ \\___  \\  \\ \\  _-/ \n"
-"  \\ \\_____\\  \\/\\_____\\  \\ \\_\\   \n"
-"   \\/_____/   \\/_____/   \\/_/   \n";
+"  ______     ______     ______  \r\n"
+" /\\  ___\\   /\\  ___\\   /\\  == \\ \r\n"
+" \\ \\  __\\   \\ \\___  \\  \\ \\  _-/ \r\n"
+"  \\ \\_____\\  \\/\\_____\\  \\ \\_\\   \r\n"
+"   \\/_____/   \\/_____/   \\/_/   \r\n"
+"                                \r\n"
+"Welcome to the ESP8266 Telnet Server!\r\n"
+"Type 'help' to see the list of commands.\r\n";
 
     String banner;
     String prompt;
@@ -66,6 +69,8 @@ private:
     void showPrompt(WiFiClient &client);
     void handleCommand(WiFiClient &client, const String &input);
     void removeInactiveClients();
+    void disconnectClient(WiFiClient &client, const String &args);
+    void flushClient(WiFiClient &client);
 };
 
 #endif

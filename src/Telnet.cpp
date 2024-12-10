@@ -2,8 +2,9 @@
 
 Telnet::Telnet() : telnetServer(nullptr), timeoutMillis(DEFAULT_TIMEOUT) {
     banner = defaultBanner;
-    prompt = "root@esp:~$ ";
+    prompt = "root@esp:~$";
     addCommand("help", std::bind(&Telnet::showHelp, this, std::placeholders::_1, std::placeholders::_2), "Shows a list of available commands.");
+    addCommand("exit", std::bind(&Telnet::disconnectClient, this, std::placeholders::_1, std::placeholders::_2), "Exits the Telnet session.");
 }
 
 void Telnet::beginAP(const char *ssid, const char *password) {
@@ -42,6 +43,7 @@ void Telnet::handleClient() {
         for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
             if (clients[i] && !clients[i].connected()) {
                 clients[i].stop();
+                flushClient(clients[i]); // Clear buffer after disconnection
             }
         }
 
@@ -50,6 +52,7 @@ void Telnet::handleClient() {
                 if (!clients[i] || !clients[i].connected()) {
                     clients[i] = telnetServer->available();
                     clients[i].setTimeout(timeoutMillis);
+                    flushClient(clients[i]); // Clear buffer after new client connection
                     showBanner(clients[i]);
                     showPrompt(clients[i]);
                     break;
@@ -62,6 +65,7 @@ void Telnet::handleClient() {
                 String input = clients[i].readStringUntil('\n');
                 input.trim();
                 handleCommand(clients[i], input);
+                flushClient(clients[i]); // Flush buffers after processing command
                 showPrompt(clients[i]);
             }
         }
@@ -77,7 +81,7 @@ void Telnet::setAlias(const char *alias, const char *cmd) {
 }
 
 void Telnet::setPrompt(const char *username, const char *deviceName) {
-    prompt = String(username) + "@" + deviceName + ":~$ ";
+    prompt = String(username) + "@" + deviceName + ":~$";
 }
 
 void Telnet::setTimeout(uint32_t timeoutMillis) {
@@ -86,21 +90,31 @@ void Telnet::setTimeout(uint32_t timeoutMillis) {
 
 void Telnet::showBanner(WiFiClient &client) {
     client.println(banner);
+    client.flush(); // Ensure the banner is sent immediately
 }
 
 void Telnet::showPrompt(WiFiClient &client) {
     client.print(prompt);
     client.print(" ");
+    client.flush(); // Ensure the prompt is sent immediately
 }
 
-void Telnet::handleCommand(WiFiClient &client, const String &input) {
+void Telnet::handleCommand(WiFiClient &client, const String &inputRaw) {
+    String input = inputRaw;
+    input.trim();
+    input.replace("\r", "");
+
+    Serial.println("Received command: [" + input + "]");
+
     for (const auto &cmd : commands) {
         if (input == cmd.cmd || aliases[input] == cmd.cmd) {
             cmd.handler(client, "");
             return;
         }
     }
+
     client.println("Unknown command: " + input);
+    client.flush(); // Ensure the error message is sent immediately
 }
 
 void Telnet::showHelp(WiFiClient &client, const String &args) {
@@ -108,4 +122,19 @@ void Telnet::showHelp(WiFiClient &client, const String &args) {
     for (auto &command : commands) {
         client.println(String(command.cmd) + " - " + String(command.help));
     }
+    client.flush(); // Ensure help message is sent immediately
+}
+
+void Telnet::disconnectClient(WiFiClient &client, const String &args) {
+    client.println("Goodbye!");
+    client.flush(); // Ensure goodbye message is sent
+    client.stop();
+    flushClient(client); // Clear client buffers after disconnection
+}
+
+void Telnet::flushClient(WiFiClient &client) {
+    while (client.available()) {
+        client.read(); // Discard any remaining data in the buffer
+    }
+    client.flush(); // Ensure all outgoing data is cleared
 }
