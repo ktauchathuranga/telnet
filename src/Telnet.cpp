@@ -2,8 +2,9 @@
 
 Telnet::Telnet() : telnetServer(nullptr), timeoutMillis(DEFAULT_TIMEOUT) {
     banner = defaultBanner;
-    prompt = "root@esp:~$ ";
+    prompt = "root@esp:~$";
     addCommand("help", std::bind(&Telnet::showHelp, this, std::placeholders::_1, std::placeholders::_2), "Shows a list of available commands.");
+    addCommand("exit", std::bind(&Telnet::disconnectClient, this, std::placeholders::_1, std::placeholders::_2), "Exits the Telnet session.");
 }
 
 void Telnet::beginAP(const char *ssid, const char *password) {
@@ -77,7 +78,7 @@ void Telnet::setAlias(const char *alias, const char *cmd) {
 }
 
 void Telnet::setPrompt(const char *username, const char *deviceName) {
-    prompt = String(username) + "@" + deviceName + ":~$ ";
+    prompt = String(username) + "@" + deviceName + ":~$";
 }
 
 void Telnet::setTimeout(uint32_t timeoutMillis) {
@@ -108,4 +109,9 @@ void Telnet::showHelp(WiFiClient &client, const String &args) {
     for (auto &command : commands) {
         client.println(String(command.cmd) + " - " + String(command.help));
     }
+}
+
+void Telnet::disconnectClient(WiFiClient &client, const String &args) {
+    client.println("Goodbye!");
+    client.stop();
 }
